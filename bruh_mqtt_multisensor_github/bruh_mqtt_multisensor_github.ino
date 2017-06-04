@@ -159,7 +159,7 @@ const int BUFFER_SIZE = 300;
 byte red        = 255;
 byte green      = 255;
 byte blue       = 255;
-byte brightness = 0;
+byte brightness = 128;
 // Variables that hold normalized variables that include color and brightness
 byte realRed    = 0;
 byte realGreen  = 0;
