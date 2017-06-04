@@ -156,9 +156,9 @@ const int BUFFER_SIZE = 300;
 #define MQTT_MAX_PACKET_SIZE 512
 
 // Variables for LED
-byte red        = 0;
-byte green      = 0;
-byte blue       = 0;
+byte red        = 255;
+byte green      = 255;
+byte blue       = 255;
 byte brightness = 0;
 // Variables that hold normalized variables that include color and brightness
 byte realRed    = 0;
