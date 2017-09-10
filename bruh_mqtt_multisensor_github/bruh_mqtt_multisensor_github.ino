@@ -18,7 +18,7 @@ To use this code you will need the following dependancies:
 
 */
 
-// The packet for the LED discovery registration packer is really big so need to make the max packet size bigger.
+// The packet for the LED discovery registration packet is really big so need to make the max packet size bigger.
 // If it still fails then edit the PubSubClient.h file directly,
 // had problems without changing the .h file so look there if it fails to register the LED
 #define MQTT_MAX_PACKET_SIZE 768
@@ -142,7 +142,8 @@ float humValue;
 
 // Variables for PIR(motion sensor)
 int  pirValue;
-int  pirStatus;
+int  pirOldValue;
+long pirTimer;
 bool motionStatus = false;
 
 // Buffers for MQTT messages
@@ -501,45 +502,48 @@ void loop() {
     }
     client.loop();
 
+    //PIR CODE
+    long now = millis();
+    pirValue = digitalRead(PIRPIN); //read state of the
+    if (pirOldValue != pirValue) {
+        if (now - pirTimer > 500) {
+            if (pirValue == LOW) {
+                motionStatus = false;
+            } else {
+                motionStatus = true;
+            }
+            sprintf(message_buff, "%s", (motionStatus) ? MQTT_ON_CMD : MQTT_OFF_CMD);
+            sendState(DEVICE_PIR_STATE_TOPIC, message_buff);
+            pirTimer = now;
+            pirOldValue = pirValue;
+        }
+    } else {
+        pirTimer = now;
+    }
+
     float newTempValue = dht.readTemperature(true);
     float newHumValue = dht.readHumidity();
 
-        //PIR CODE
-        pirValue = digitalRead(PIRPIN); //read state of the
-
-        if (pirValue == LOW && pirStatus != 1) {
-            motionStatus = false;
-            sprintf(message_buff, "%s", (motionStatus) ? MQTT_ON_CMD : MQTT_OFF_CMD);
-            sendState(DEVICE_PIR_STATE_TOPIC, message_buff);
-            pirStatus = 1;
-        } else if (pirValue == HIGH && pirStatus != 2) {
-            motionStatus = true;
-            sprintf(message_buff, "%s", (motionStatus) ? MQTT_ON_CMD : MQTT_OFF_CMD);
-            sendState(DEVICE_PIR_STATE_TOPIC, message_buff);
-            pirStatus = 2;
-        }
-
-        delay(100);
-
-        if (checkBoundSensor(newTempValue, tempValue, diffTEMP)) {
-            tempValue = newTempValue;
-            dtostrf(tempValue, 4, 2, str_buff);
-            sprintf(message_buff, "%s", str_buff);
-            sendState(DEVICE_TEMP_STATE_TOPIC, message_buff);
-        }
-
-        if (checkBoundSensor(newHumValue, humValue, diffHUM)) {
-            humValue = newHumValue;
-            dtostrf(humValue, 4, 2, str_buff);
-            sprintf(message_buff, "%s", str_buff);
-            sendState(DEVICE_HUMIDITY_STATE_TOPIC, message_buff);
-        }
-
-        int newLDR = analogRead(LDRPIN);
-
-        if (checkBoundSensor(newLDR, LDR, diffLDR)) {
-            LDR = newLDR;
-            sprintf(message_buff, "%d", LDR);
-            sendState(DEVICE_LDR_STATE_TOPIC, message_buff);
-        }
+    if (checkBoundSensor(newTempValue, tempValue, diffTEMP)) {
+        tempValue = newTempValue;
+        dtostrf(tempValue, 4, 2, str_buff);
+        sprintf(message_buff, "%s", str_buff);
+        sendState(DEVICE_TEMP_STATE_TOPIC, message_buff);
     }
+
+    if (checkBoundSensor(newHumValue, humValue, diffHUM)) {
+        humValue = newHumValue;
+        dtostrf(humValue, 4, 2, str_buff);
+        sprintf(message_buff, "%s", str_buff);
+        sendState(DEVICE_HUMIDITY_STATE_TOPIC, message_buff);
+    }
+
+    int newLDR = analogRead(LDRPIN);
+
+    if (checkBoundSensor(newLDR, LDR, diffLDR)) {
+        LDR = newLDR;
+        sprintf(message_buff, "%d", LDR);
+        sendState(DEVICE_LDR_STATE_TOPIC, message_buff);
+    }
+    delay(100);
+}
