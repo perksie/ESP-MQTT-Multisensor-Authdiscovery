@@ -122,7 +122,7 @@ const int bluePin  = D3;
 float ldrValue;
 int   LDR;
 float calcLDR;
-float diffLDR = 25;
+float diffLDR = 5;
 
 // Variables for temp sensor
 float diffTEMP = 0.2;
