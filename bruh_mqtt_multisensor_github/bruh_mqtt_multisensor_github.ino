@@ -29,7 +29,6 @@ To use this code you will need the following dependancies:
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-#include <FS.h>
 
 
 /************ WIFI and MQTT INFORMATION (CHANGE THESE FOR YOUR SETUP) ******************/
@@ -111,12 +110,6 @@ int OTAport = 8266;
 #define MQTT_REGISTER_CMD   "register"   // command to force reregistration
 #define MQTT_UNREGISTER_CMD "unregister" // command to force unregistration
 
-#define PIR_REG  "pir.reg"
-#define TEMP_REG "temp.reg"
-#define HUM_REG  "hum.reg"
-#define LDR_REG  "ldr.reg"
-#define LED_REG  "led.reg"
-
 const int redPin   = D1;
 const int greenPin = D2;
 const int bluePin  = D3;
@@ -154,26 +147,17 @@ int calibrationTime = 0;
 
 const int BUFFER_SIZE = 300;
 
-#define MQTT_MAX_PACKET_SIZE 512
-
 // Variables for LED
-byte red        = 255;
-byte green      = 255;
-byte blue       = 255;
-byte brightness = 128;
+byte red        = 0;
+byte green      = 0;
+byte blue       = 0;
+byte brightness = 0;
 // Variables that hold normalized variables that include color and brightness
 byte realRed    = 0;
 byte realGreen  = 0;
 byte realBlue   = 0;
 
 bool stateOn    = false;
-
-// Variables to determin if HomeAssistant registration is needed
-bool pirRegged      = false;
-bool tempRegged     = false;
-bool humidityRegged = false;
-bool ldrRegged      = false;
-bool ledRegged      = false;
 
 
 WiFiClient espClient;
@@ -190,22 +174,6 @@ void setup() {
 
     Serial.begin(115200);
     delay(10);
-        // Prep the file system, formatting if needed
-    if(!SPIFFS.begin()){
-        Serial.println("SPIFFS.begin() failed, calling format");
-        if(SPIFFS.format()){
-            Serial.println("Format successfull, calling begin");
-            if(!SPIFFS.begin()){
-                Serial.println("Begin failed after format, aborting boot and sleep looping");
-                while(true)
-                    delay(1000);
-            }
-        } else {
-            Serial.println("Format failed, aborting boot and sleep looping");
-            while(true)
-                delay(1000);
-        }
-    }
 
     Serial.print("calibrating sensor ");
     for (int i = 0; i < calibrationTime; i++) {
@@ -310,55 +278,12 @@ void sendAllState() {
 }
 
 
-bool needToRegister(char* sensorName){
-    char needReg[1];
-    needReg[0] = true;
-    if(SPIFFS.exists(sensorName)){
-        File f = SPIFFS.open(sensorName, "r");
-        if(f){
-            f.readBytes(needReg, 1);
-            // reverse the value of the file, if the file contains true then no need to register
-            return (needReg[0] == true)? false : true;
-        }else {
-            return true;
-        }
-    } else {
-        return true;
-    }
-}
-
-void registeredSensor(char* sensorName){
-    char needReg[1];
-    needReg[0] = true;
-
-    File f = SPIFFS.open(sensorName, "w");
-    if(f){
-        f.write((uint8_t*)needReg, 1);
-    }
-}
-
-
 void registerSensors(bool forceRegister = false){
-    if(forceRegister || needToRegister(PIR_REG)){
-        sendState(DEVICE_PIR_DISCOVERY_TOPIC, DEVICE_PIR_DISCOVERY_REGISTER_MESSAGE);
-        registeredSensor(PIR_REG);
-    }
-    if(forceRegister || needToRegister(TEMP_REG)){
-        sendState(DEVICE_TEMP_DISCOVERY_TOPIC, DEVICE_TEMP_DISCOVERY_REGISTER_MESSAGE);
-        registeredSensor(TEMP_REG);
-    }
-    if(forceRegister || needToRegister(HUM_REG)){
-        sendState(DEVICE_HUMIDITY_DISCOVERY_TOPIC, DEVICE_HUMIDITY_DISCOVERY_REGISTER_MESSAGE);
-        registeredSensor(HUM_REG);
-    }
-    if(forceRegister || needToRegister(LDR_REG)){
-        sendState(DEVICE_LDR_DISCOVERY_TOPIC, DEVICE_LDR_DISCOVERY_REGISTER_MESSAGE);
-        registeredSensor(LDR_REG);
-    }
-    if(forceRegister || needToRegister(LED_REG)){
-        sendState(DEVICE_LED_DISCOVERY_TOPIC, DEVICE_LED_DISCOVERY_REGISTER_MESSAGE);
-        registeredSensor(LED_REG);
-    }
+    sendState(DEVICE_PIR_DISCOVERY_TOPIC, DEVICE_PIR_DISCOVERY_REGISTER_MESSAGE);
+    sendState(DEVICE_TEMP_DISCOVERY_TOPIC, DEVICE_TEMP_DISCOVERY_REGISTER_MESSAGE);
+    sendState(DEVICE_HUMIDITY_DISCOVERY_TOPIC, DEVICE_HUMIDITY_DISCOVERY_REGISTER_MESSAGE);
+    sendState(DEVICE_LDR_DISCOVERY_TOPIC, DEVICE_LDR_DISCOVERY_REGISTER_MESSAGE);
+    sendState(DEVICE_LED_DISCOVERY_TOPIC, DEVICE_LED_DISCOVERY_REGISTER_MESSAGE);
 }
 
 void unregisterSensors(){
@@ -465,6 +390,7 @@ void setColor(int inR, int inG, int inB) {
 
 void reconnect() {
     // Loop until we're reconnected
+    int failedCnt = 0;
     while (!client.connected()) {
         Serial.print("Attempting MQTT connection...");
         // Attempt to connect
@@ -482,6 +408,11 @@ void reconnect() {
             Serial.print("failed, rc=");
             Serial.print(client.state());
             Serial.println(" try again in 5 seconds");
+            failedCnt++;
+            if(failedCnt > 10){ // if failed to connect more than 10 times reset device to try and fix
+            	Serial.println("Restarting device");
+            	ESP.restart();
+            }
             // Wait 5 seconds before retrying
             delay(5000);
         }
@@ -506,7 +437,10 @@ void loop() {
     long now = millis();
     pirValue = digitalRead(PIRPIN); //read state of the
     if (pirOldValue != pirValue) {
-        if (now - pirTimer > 500) {
+    	// Wait for 2 full triggers before sending a detect to try and debounce.
+    	// For some reason there are a lot of false triggers and the default trigger
+    	// time is 2000ms for the RCWL modules so wait for 2 triggers to reduce false reports
+        if (now - pirTimer > 4100) {
             if (pirValue == LOW) {
                 motionStatus = false;
             } else {
