@@ -40,12 +40,12 @@ bool DEBUG = true; //Change to true to enable debugging
 #define IsFahrenheit false //to use celsius change to false
 
 /************ WIFI and MQTT INFORMATION (CHANGE THESE FOR YOUR SETUP) ******************/
-#define wifi_ssid "Tell My WiFi That I Love Her" //Tell My WiFi That I Love Her
-#define wifi_password "Samjess23"
-#define mqtt_server "192.168.100.3"
-#define mqtt_user "homeassistant" 
-#define mqtt_password "homeassistant"
-#define mqtt_port 1883
+#define wifi_ssid            "WIFI_NAME"
+#define wifi_password        "WIFI_PASSWORD"
+#define mqtt_server          "MQTT_SERVER_ADDRESS"
+#define mqtt_user            "MQTT_USERNAME"
+#define mqtt_password        "MQTT_PASSWORD"
+#define mqtt_port            1883
 
 /*Would be best to use a unique device name as to not conflict with MQTT topics.*/
 #define DEVICE_NAME          "RoomSensor123"
